@@ -1,77 +1,25 @@
-import { supabase } from "@/lib/supabase";
-
-type PublicProfilePageProps = {
-  params: Promise<{ username: string }>;
+type PageProps = {
+  params: Promise<{
+    username: string;
+  }>;
 };
 
-export default async function PublicProfilePage({
-  params,
-}: PublicProfilePageProps) {
-  const resolved = await params;
-  const username = resolved.username.toLowerCase();
-
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("username", username)
-    .maybeSingle();
-
-  if (error) {
-    return <main className="p-6 text-red-600">{error.message}</main>;
-  }
-
-  if (!profile) {
-    return <main className="p-6">This profile could not be found.</main>;
-  }
-
-  if (!profile.is_public) {
-    return <main className="p-6">This profile is private.</main>;
-  }
-
-  const fullName = [
-    profile.first_name,
-    profile.middle_name,
-    profile.last_name,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
+export default async function PublicProfilePage({ params }: PageProps) {
+  const { username } = await params;
 
   return (
-    <main className="p-6 max-w-2xl">
-      <h1 className="text-2xl font-semibold">
-        {fullName || profile.username || "Public Profile"}
+    <div className="mx-auto max-w-3xl px-4 py-10">
+      <p className="text-sm font-medium uppercase tracking-[0.16em] text-zinc-500">
+        Public profile
+      </p>
+
+      <h1 className="mt-4 text-3xl font-semibold text-zinc-950">
+        @{username}
       </h1>
 
-      <div className="mt-4 text-sm space-y-2">
-        <p>
-          <strong>Username:</strong> {profile.username || "—"}
-        </p>
-        <p>
-          <strong>Level:</strong> {profile.user_level || "—"}
-        </p>
-        <p>
-          <strong>Bio:</strong> {profile.bio || "—"}
-        </p>
-        <p>
-          <strong>Country:</strong> {profile.country_of_residence || "—"}
-        </p>
-        <p>
-          <strong>Website:</strong>{" "}
-          {profile.website ? (
-            <a
-              className="underline"
-              href={profile.website}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {profile.website}
-            </a>
-          ) : (
-            "—"
-          )}
-        </p>
-      </div>
-    </main>
+      <p className="mt-4 text-base leading-7 text-zinc-600">
+        This public profile page is being prepared.
+      </p>
+    </div>
   );
 }
