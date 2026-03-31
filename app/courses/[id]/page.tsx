@@ -13,13 +13,15 @@ type PageProps = {
 };
 
 export default async function CoursePage({ params }: PageProps) {
-  const { data: course } = await supabase
+  const response = await supabase
     .from("courses")
     .select("*")
     .eq("id", params.id)
     .single();
 
-  // 🔒 Protección contra null (esto arregla el error de Vercel)
+  const course = response.data;
+
+  // 🔒 protección total para TypeScript + Vercel
   if (!course) {
     return (
       <div className="p-10">
