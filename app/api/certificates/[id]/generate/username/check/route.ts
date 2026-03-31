@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         available: false,
         normalized: validation.normalized,
-        code: validation.code ?? "invalid",
+        code: validation.code,
         message: validation.message,
       });
     }
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase
       .from("profiles")
       .select("id")
-      .eq("username", validation.normalized)
+      .ilike("username", validation.normalized)
       .maybeSingle();
 
     if (error) {
