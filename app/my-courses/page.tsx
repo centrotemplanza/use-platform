@@ -1,269 +1,177 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-type Enrollment = {
+type EnrollmentRow = {
   id: string;
   user_id: string;
   course_id: string;
   status: string;
-  enrolled_at: string;
-  completed_at: string | null;
-  courses: {
-    id: string;
-    title: string;
-    description: string | null;
-    course_type: string;
-    start_date: string | null;
-    end_date: string | null;
-    price: number | null;
-  } | null;
+  courses:
+    | {
+        id: string;
+        title: string | null;
+        description: string | null;
+        course_type: string | null;
+      }[]
+    | null;
 };
 
-function getCertificateTitle(courseType: string | null | undefined) {
-  switch (courseType) {
-    case "practitioner_level_1":
-      return "Practitioner Level 1 Certification";
-    case "practitioner_level_2":
-      return "Practitioner Level 2 Certification";
-    case "practitioner_level_3":
-      return "Practitioner Level 3 Certification";
-    case "practitioner_level_4":
-      return "Practitioner Level 4 Certification";
-    case "instructor_level_1":
-      return "Instructor Level 1 Certification";
-    case "instructor_level_2":
-      return "Instructor Level 2 Certification";
-    case "instructor_level_3":
-      return "Instructor Level 3 Certification";
-    case "instructor_level_4":
-      return "Instructor Level 4 Certification";
-    default:
-      return "Course Completion Certificate";
-  }
-}
-
-function generateCertificateNumber(userId: string, courseId: string) {
-  const shortUser = userId.replace(/-/g, "").slice(0, 8).toUpperCase();
-  const shortCourse = courseId.replace(/-/g, "").slice(0, 8).toUpperCase();
-  return `USE-${shortUser}-${shortCourse}`;
-}
+type CourseCard = {
+  id: string;
+  title: string;
+  description: string;
+  courseType: string;
+  status: string;
+};
 
 export default function MyCoursesPage() {
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [courses, setCourses] = useState<CourseCard[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-
-  async function loadMyCourses() {
-    setLoading(true);
-    setError(null);
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      setError("You must be logged in.");
-      setLoading(false);
-      return;
-    }
-
-    const { data, error: enrollmentsError } = await supabase
-      .from("enrollments")
-      .select(`
-        id,
-        user_id,
-        course_id,
-        status,
-        enrolled_at,
-        completed_at,
-        courses (
-          id,
-          title,
-          description,
-          course_type,
-          start_date,
-          end_date,
-          price
-        )
-      `)
-      .eq("user_id", user.id)
-      .order("enrolled_at", { ascending: false });
-
-    if (enrollmentsError) {
-      console.error("LOAD MY COURSES ERROR:", enrollmentsError);
-      setError(enrollmentsError.message);
-      setLoading(false);
-      return;
-    }
-
-    setEnrollments((data as Enrollment[]) || []);
-    setLoading(false);
-  }
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
-    loadMyCourses();
-  }, []);
+    async function loadCourses() {
+      try {
+        setLoading(true);
+        setErrorMessage("");
 
-  async function completeCourse(enrollment: Enrollment) {
-    setError(null);
-    setMessage(null);
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+        if (userError) {
+          setErrorMessage("Could not load user.");
+          setLoading(false);
+          return;
+        }
 
-    if (userError || !user) {
-      setError("You must be logged in.");
-      return;
-    }
+        if (!user) {
+          setCourses([]);
+          setLoading(false);
+          return;
+        }
 
-    const { error: completeError } = await supabase
-      .from("enrollments")
-      .update({
-        status: "completed",
-        completed_at: new Date().toISOString(),
-      })
-      .eq("id", enrollment.id);
+        const { data, error } = await supabase
+          .from("enrollments")
+          .select(
+            `
+              id,
+              user_id,
+              course_id,
+              status,
+              courses (
+                id,
+                title,
+                description,
+                course_type
+              )
+            `
+          )
+          .eq("user_id", user.id);
 
-    if (completeError) {
-      console.error("COMPLETE COURSE ERROR:", completeError);
-      setError(completeError.message);
-      return;
-    }
+        if (error) {
+          setErrorMessage("Could not load courses.");
+          setLoading(false);
+          return;
+        }
 
-    if (
-      enrollment.courses?.course_type === "practitioner_level_1" ||
-      enrollment.courses?.course_type === "practitioner_level_2" ||
-      enrollment.courses?.course_type === "practitioner_level_3" ||
-      enrollment.courses?.course_type === "practitioner_level_4"
-    ) {
-      const { error: profileUpdateError } = await supabase
-        .from("profiles")
-        .update({
-          user_level: "practitioner",
-        })
-        .eq("id", enrollment.user_id);
+        const rows = (data ?? []) as EnrollmentRow[];
 
-      if (profileUpdateError) {
-        console.error("PROFILE LEVEL UPDATE ERROR:", profileUpdateError);
-        setError(profileUpdateError.message);
-        return;
+        const mapped: CourseCard[] = rows.map((row) => {
+          const course =
+            Array.isArray(row.courses) && row.courses.length > 0
+              ? row.courses[0]
+              : null;
+
+          return {
+            id: course?.id ?? row.course_id,
+            title: course?.title ?? "Untitled course",
+            description: course?.description ?? "",
+            courseType: course?.course_type ?? "unknown",
+            status: row.status,
+          };
+        });
+
+        setCourses(mapped);
+      } catch {
+        setErrorMessage("Unexpected error loading courses.");
+      } finally {
+        setLoading(false);
       }
     }
 
-    const certificateTitle = getCertificateTitle(
-      enrollment.courses?.course_type
-    );
-
-    const certificateNumber = generateCertificateNumber(
-      enrollment.user_id,
-      enrollment.course_id
-    );
-
-    const { error: certificateError } = await supabase
-      .from("certificates")
-      .upsert(
-        {
-          user_id: enrollment.user_id,
-          course_id: enrollment.course_id,
-          certificate_type: "completion",
-          certificate_title: certificateTitle,
-          certificate_number: certificateNumber,
-          issued_by: null,
-        },
-        {
-          onConflict: "user_id,course_id,certificate_type",
-        }
-      );
-
-    if (certificateError) {
-      console.error("CREATE CERTIFICATE ERROR:", certificateError);
-      setError(certificateError.message);
-      return;
-    }
-
-    setMessage(
-      "Course completed successfully. Your certificate has been created."
-    );
-    loadMyCourses();
-  }
+    loadCourses();
+  }, []);
 
   if (loading) {
-    return <main className="p-6">Loading my courses...</main>;
+    return (
+      <div className="mx-auto max-w-5xl px-4 py-10">
+        <h1 className="text-3xl font-semibold">My Courses</h1>
+        <p className="mt-4 text-sm text-zinc-600">Loading courses...</p>
+      </div>
+    );
   }
 
-  if (error) {
-    return <main className="p-6 text-red-600">{error}</main>;
+  if (errorMessage) {
+    return (
+      <div className="mx-auto max-w-5xl px-4 py-10">
+        <h1 className="text-3xl font-semibold">My Courses</h1>
+        <p className="mt-4 text-sm text-red-600">{errorMessage}</p>
+      </div>
+    );
   }
 
   return (
-    <main className="p-6 max-w-3xl">
-      <h1 className="text-2xl font-semibold">My Courses</h1>
+    <div className="mx-auto max-w-5xl px-4 py-10">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-semibold">My Courses</h1>
+        <Link
+          href="/courses"
+          className="text-sm border px-4 py-2 rounded"
+        >
+          Browse courses
+        </Link>
+      </div>
 
-      {message ? <p className="mt-4 text-green-600">{message}</p> : null}
+      {courses.length === 0 ? (
+        <div className="mt-8">
+          <p className="text-zinc-600">
+            You are not enrolled in any courses yet.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-8 grid gap-6 md:grid-cols-2">
+          {courses.map((course) => (
+            <div
+              key={course.id}
+              className="border rounded-xl p-5 bg-white"
+            >
+              <h2 className="text-lg font-semibold">{course.title}</h2>
 
-      <div className="mt-6 flex flex-col gap-4">
-        {enrollments.length === 0 ? (
-          <p>You are not enrolled in any courses yet.</p>
-        ) : (
-          enrollments.map((enrollment) => (
-            <div key={enrollment.id} className="border rounded p-4">
-              <h2 className="text-lg font-semibold">
-                {enrollment.courses?.title || "Untitled course"}
-              </h2>
+              <p className="mt-2 text-sm text-zinc-600">
+                {course.description}
+              </p>
 
-              <div className="mt-2 text-sm space-y-1">
-                <p>
-                  <strong>Status:</strong> {enrollment.status}
-                </p>
-                <p>
-                  <strong>Type:</strong> {enrollment.courses?.course_type || "—"}
-                </p>
-                <p>
-                  <strong>Description:</strong>{" "}
-                  {enrollment.courses?.description || "—"}
-                </p>
-                <p>
-                  <strong>Enrolled at:</strong>{" "}
-                  {new Date(enrollment.enrolled_at).toLocaleString()}
-                </p>
-                <p>
-                  <strong>Completed at:</strong>{" "}
-                  {enrollment.completed_at
-                    ? new Date(enrollment.completed_at).toLocaleString()
-                    : "—"}
-                </p>
-              </div>
+              <div className="mt-4 flex justify-between items-center">
+                <span className="text-xs bg-zinc-200 px-2 py-1 rounded">
+                  {course.courseType}
+                </span>
 
-              <div className="mt-4 flex flex-col gap-2">
-                {enrollment.courses?.id ? (
-                  <Link
-                    className="underline"
-                    href={`/courses/${enrollment.courses.id}`}
-                  >
-                    View course
-                  </Link>
-                ) : null}
-
-                {enrollment.status !== "completed" ? (
-                  <button
-                    className="border rounded px-3 py-2"
-                    onClick={() => completeCourse(enrollment)}
-                  >
-                    Mark as completed
-                  </button>
-                ) : null}
+                <Link
+                  href={`/courses/${course.id}`}
+                  className="text-sm underline"
+                >
+                  Go to course
+                </Link>
               </div>
             </div>
-          ))
-        )}
-      </div>
-    </main>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
