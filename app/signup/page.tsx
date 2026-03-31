@@ -61,7 +61,7 @@ export default function SignupPage() {
             message: data.message,
           });
         }
-      } catch (error) {
+      } catch {
         setUsernameState({
           status: "error",
           message: "Could not verify username right now.",
@@ -88,7 +88,7 @@ export default function SignupPage() {
     try {
       const username = normalizeUsername(usernameInput);
 
-      const { data, error } = await supabase.auth.signUp({
+      const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -98,11 +98,11 @@ export default function SignupPage() {
         },
       });
 
-      if (error) throw error;
+      if (signUpError) throw signUpError;
 
       setFormMessage("Account created. Check your email.");
-    } catch (error: any) {
-      setFormMessage(error.message || "Something went wrong.");
+    } catch (err: unknown) {
+      setFormMessage(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setIsSubmitting(false);
     }
